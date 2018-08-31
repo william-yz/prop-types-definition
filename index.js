@@ -14,22 +14,28 @@ module.exports = function(ReactPropTypes) {
 
         return { name: 'unknown' };
     }
-
-    function wrapFunction(fn, name, value, getTypeDefinition) {
-        fn.getTypeDefinition = getTypeDefinition.bind(null, name, false, value);
-
-        if (fn.isRequired) {
-            fn.isRequired.getTypeDefinition = getTypeDefinition.bind(null, name, true, value);
+    function wrapFunction(dict, name, value, getTypeDefinition) {
+        var orig = dict[name];
+        function newFunction() {
+            return orig.apply(this, arguments);
         }
-
-        return fn;
+        newFunction.getTypeDefinition = getTypeDefinition.bind(null, name, false, value);
+        if (orig.isRequired) {
+            newFunction.isRequired = function newRequired() {
+                return orig.isRequired.apply(this, arguments);
+            };
+            newFunction.isRequired.getTypeDefinition = getTypeDefinition.bind(null, name, true, value);
+        }
+        dict[name] = newFunction;
+        return newFunction;
     }
 
     function wrapMethod(dict, name, getTypeDefinition) {
         var orig = dict[name];
-
-        dict[name] = function(value) {
-            return wrapFunction(orig.apply(this, arguments), name, value, getTypeDefinition);
+        dict[name] = function (value) {
+            var o = {};
+            o[name] = orig.apply(this, arguments)
+            return wrapFunction(o, name, value, getTypeDefinition);
         };
     }
 
@@ -45,7 +51,7 @@ module.exports = function(ReactPropTypes) {
             case 'symbol':
             case 'node':
             case 'element':
-                wrapFunction(ReactPropTypes[method], method, null, function(name, required) {
+                wrapFunction(ReactPropTypes, method, null, function(name, required) {
                     return {
                         type: { name: name },
                         required: required
